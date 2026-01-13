@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+}
+
+/* Custom styles layer if needed, but in v4 we often just write CSS */
+body {
+  background-color: rgb(249 250 251);
+  /* gray-50 */
+  color: rgb(17 24 39);
+  /* gray-900 */
+}
