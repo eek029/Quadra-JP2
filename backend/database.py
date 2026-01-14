@@ -14,7 +14,23 @@ elif DATABASE_URL and DATABASE_URL.startswith("postgresql+psycopg2://"):
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL must be set")
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+import ssl
+from sqlalchemy.ext.asyncio import create_async_engine
+
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_REQUIRED
+
+engine = create_async_engine(
+    DATABASE_URL,
+    echo=False,
+    connect_args={
+        "ssl": ssl_context,
+        "statement_cache_size": 0,  # <- ESSENCIAL para pgbouncer
+    },
+)
+
+
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
 class Base(DeclarativeBase):
