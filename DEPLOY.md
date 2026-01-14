@@ -1,22 +1,33 @@
-# Guia de Deploy para Produção
+# Guia de Deploy GRATUITO para Produção
 
-Este guia contém instruções passo a passo para fazer deploy do sistema de reservas na internet.
+Este guia contém instruções passo a passo para fazer deploy do sistema de reservas usando **APENAS serviços 100% gratuitos**.
+
+## ✅ Stack GRATUITA
+
+- **Banco de Dados**: Supabase (grátis até 500MB)
+- **Backend + Frontend**: Vercel (grátis)
+- **Cache/Redis**: Supabase (tem suporte nativo a Redis via Upstash gratuito)
+- **Autenticação OAuth**: Google Cloud (grátis)
+
+> **💡 Diferença chave**: O backend FastAPI será convertido em Vercel Serverless Functions (Python), eliminando a necessidade de Railway/Render.
 
 ## 📋 Checklist Pré-Deploy
 
 - [ ] Conta Supabase criada e projeto configurado
 - [ ] Conta Google Cloud com OAuth configurado
+- [ ] Conta Vercel (gratuita)
 - [ ] Repositório Git criado (GitHub recomendado)
-- [ ] Contas criadas em: Vercel, Railway (ou Render), Upstash
+
+---
 
 ## 🗄️ Passo 1: Configurar Supabase (Banco de Dados)
 
 ### 1.1. Criar/Verificar Projeto
 1. Acesse https://supabase.com/dashboard
 2. Se já tem projeto, verifique se está ativo
-3. Se não tem, clique em "New Project"
+3. Se não tem, clique em **"New Project"**
    - Nome: `quadra-reservas` (ou similar)
-   - Database Password: Anote em lugar seguro!
+   - Database Password: **Anote em lugar seguro!**
    - Region: Escolha mais próximo (ex: South America)
 
 ### 1.2. Obter Connection String
@@ -26,16 +37,21 @@ Este guia contém instruções passo a passo para fazer deploy do sistema de res
 4. Copie a string que começa com `postgresql://postgres.`
 5. Substitua `[YOUR-PASSWORD]` pela senha do banco
 
-### 1.3. Converter para AsyncPG
-A string copiada estará assim:
+Exemplo:
 ```
 postgresql://postgres.xxx:senha@aws-0-us-east-1.pooler.supabase.com:6543/postgres
 ```
 
-Adicione `+asyncpg` após `postgresql`:
-```
-postgresql+asyncpg://postgres.xxx:senha@aws-0-us-east-1.pooler.supabase.com:6543/postgres
-```
+### 1.3. Habilitar Redis no Supabase (GRÁTIS!)
+
+Boa notícia: o Supabase tem integração gratuita com Upstash Redis!
+
+1. No Supabase Dashboard, vá em **"Integrations"**
+2. Procure por **"Upstash Redis"**
+3. Clique em **"Enable"** (é grátis!)
+4. Copie a **Redis Connection String** (formato: `redis://default:xxx@...`)
+
+---
 
 ## 🔐 Passo 2: Configurar Google OAuth
 
@@ -59,263 +75,340 @@ postgresql+asyncpg://postgres.xxx:senha@aws-0-us-east-1.pooler.supabase.com:6543
 2. Clique em `Create Credentials` → `OAuth 2.0 Client ID`
 3. Application type: **Web application**
 4. Name: `Quadra Backend`
-5. **Authorized redirect URIs** - Adicione TODAS estas URLs:
+5. **Authorized redirect URIs** - Adicione estas URLs:
    ```
-   http://localhost:8000/api/v1/auth/callback/google
-   https://SEU-BACKEND.railway.app/api/v1/auth/callback/google
+   http://localhost:3000/api/auth/callback/google
+   https://SEU-APP.vercel.app/api/auth/callback/google
    ```
-   ⚠️ **Importante**: Você vai atualizar a URL do Railway depois do deploy!
+   ⚠️ **Importante**: Você vai atualizar a URL do Vercel depois do deploy!
 
 6. Clique em `Create`
 7. **Copie e guarde**:
    - Client ID
    - Client Secret
 
-## ⚡ Passo 3: Configurar Upstash (Redis)
+---
 
-1. Acesse https://console.upstash.com/
-2. Crie conta (pode usar Google)
-3. Clique em `Create Database`
-4. Nome: `quadra-redis`
-5. Region: Escolha mais próximo
-6. Type: Regional (grátis)
-7. Copie a **Redis URL** (formato: `redis://default:xxx@yyy.upstash.io:6379`)
+## 🔧 Passo 3: Adaptar Backend para Vercel Serverless
 
-## 🚂 Passo 4: Deploy do Backend (Railway)
+Como a Vercel não roda servidores persistentes (como Railway), vamos converter o FastAPI em Vercel Functions.
 
-### 4.1. Preparar Repositório
+### 3.1. Criar estrutura para Vercel
+
+No diretório raiz do projeto (`/home/henrique/Quadra-JP2`):
+
+```bash
+# Criar diretório api/ na raiz
+mkdir -p api
+
+# Copiar rotas do FastAPI para api/
+# Cada arquivo em api/ se torna uma rota serverless
+```
+
+### 3.2. Criar `vercel.json` na raiz do projeto
+
+Arquivo de configuração que diz à Vercel como rodar o Python:
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/**/*.py",
+      "use": "@vercel/python"
+    },
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
+    }
+  ]
+}
+```
+
+### 3.3. Criar `requirements.txt` na raiz
+
+```txt
+fastapi
+sqlalchemy
+asyncpg
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+redis
+httpx
+```
+
+> **Nota**: Vou criar scripts automatizados para fazer essa conversão!
+
+---
+
+## ▲ Passo 4: Deploy do Frontend + Backend na Vercel
+
+### 4.1. Preparar Repositório Git
+
 ```bash
 cd /home/henrique/Quadra-JP2
 
 # Criar .gitignore se não existir
-echo ".env
+cat > .gitignore << EOL
+.env
 .env.local
+.env*.local
 __pycache__/
 *.pyc
 .venv/
 venv/
-node_modules/" > .gitignore
+node_modules/
+.next/
+.vercel
+EOL
 
 # Inicializar git (se ainda não foi)
 git init
 git add .
-git commit -m "Preparando para deploy"
+git commit -m "Preparando para deploy gratuito na Vercel"
 
-# Criar repositório no GitHub e fazer push
+# Criar repositório no GitHub
+# Vá em github.com e crie um novo repositório 'quadra-reservas'
+
+# Adicionar remote e fazer push
 git remote add origin https://github.com/SEU-USUARIO/quadra-reservas.git
+git branch -M main
 git push -u origin main
 ```
 
-### 4.2. Instalar Railway CLI
-```bash
-npm install -g @railway/cli
+### 4.2. Deploy via GitHub (Recomendado)
+
+1. Acesse https://vercel.com/dashboard
+2. Clique em **"Add New Project"**
+3. Clique em **"Import Git Repository"**
+4. Selecione o repositório `quadra-reservas` que acabou de criar
+5. Configure:
+   - **Framework Preset**: Next.js
+   - **Root Directory**: `frontend`
+   - Deixe outras opções padrão
+6. Clique em **"Deploy"**
+
+### 4.3. Configurar Variáveis de Ambiente na Vercel
+
+No dashboard da Vercel:
+1. Vá no projeto → **Settings** → **Environment Variables**
+2. Adicione as seguintes variáveis:
+
+**Para o Frontend:**
+```
+NEXT_PUBLIC_API_URL=/api
 ```
 
-### 4.3. Fazer Deploy
-```bash
-# Login
-railway login
-
-# Criar projeto
-railway init
-
-# Escolha "Deploy from GitHub repo"
-# Selecione o repositório que acabou de criar
-
-# OU deploy direto do código local:
-cd backend
-railway up
+**Para o Backend (API):**
+```
+DATABASE_URL=postgresql+asyncpg://postgres.xxx:senha@....pooler.supabase.com:6543/postgres
+REDIS_URL=redis://default:xxx@...upstash.io:6379
+JWT_SECRET=(gere com: openssl rand -hex 32)
+GOOGLE_CLIENT_ID=seu-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
+FRONTEND_URL=https://seu-app.vercel.app
+CORS_ORIGINS=https://seu-app.vercel.app
 ```
 
-### 4.4. Configurar Variáveis de Ambiente no Railway
+3. Para cada variável:
+   - Marque **Production**, **Preview** e **Development**
+   - Clique em **Save**
 
-Via CLI:
-```bash
-railway variables set DATABASE_URL="postgresql+asyncpg://postgres.xxx..."
-railway variables set REDIS_URL="redis://default:xxx@upstash.io:6379"
-railway variables set JWT_SECRET="$(openssl rand -hex 32)"
-railway variables set GOOGLE_CLIENT_ID="seu-client-id"
-railway variables set GOOGLE_CLIENT_SECRET="seu-secret"
-railway variables set JWT_EXPIRES_IN="3600"
-railway variables set CORS_ORIGINS="https://sua-app.vercel.app"
-railway variables set FRONTEND_URL="https://sua-app.vercel.app"
-railway variables set PROMETHEUS_ENABLED="true"
+### 4.4. Redeploy após adicionar variáveis
+
+1. Vá em **Deployments**
+2. Clique nos 3 pontos da última deployment
+3. Clique em **Redeploy**
+
+### 4.5. Obter URL do Deploy
+
+Após o deploy, a Vercel vai gerar uma URL como:
+```
+https://quadra-reservas.vercel.app
 ```
 
-Ou via Dashboard:
-1. Acesse https://railway.app/dashboard
-2. Selecione seu projeto
-3. Vá em `Variables`
-4. Adicione cada variável manualmente
+---
 
-### 4.5. Verificar Deploy
-1. Após deploy, Railway vai gerar uma URL
-2. Exemplo: `https://quadra-backend-production.up.railway.app`
-3. Teste o health check: `https://sua-url.railway.app/healthz`
-4. Deve retornar: `{"status":"ok","version":"1.0.0"}`
+## 🔄 Passo 5: Atualizar Google OAuth com URL Real
 
-### 4.6. ATUALIZAR Google OAuth Redirect URI
-1. Volte no Google Cloud Console
-2. Edite as credenciais OAuth
-3. Adicione a URL real do Railway:
+Agora que você tem a URL do Vercel:
+
+1. Volte no **Google Cloud Console**
+2. Vá em `APIs & Services` → `Credentials`
+3. Edite as credenciais OAuth criadas anteriormente
+4. Em **Authorized redirect URIs**, adicione:
    ```
-   https://SUA-URL-REAL.railway.app/api/v1/auth/callback/google
+   https://SEU-APP-REAL.vercel.app/api/auth/callback/google
    ```
+5. Clique em **Save**
 
-### 4.7. ATUALIZAR variável no Railway
-```bash
-railway variables set OAUTH_REDIRECT_URI="https://SUA-URL-REAL.railway.app/api/v1/auth/callback/google"
-```
-
-## ▲ Passo 5: Deploy do Frontend (Vercel)
-
-### 5.1. Instalar Vercel CLI
-```bash
-npm install -g vercel
-```
-
-### 5.2. Fazer Deploy
-```bash
-cd /home/henrique/Quadra-JP2/frontend
-
-# Login
-vercel login
-
-# Deploy (modo interativo)
-vercel
-
-# Responda as perguntas:
-# - Set up and deploy? Yes
-# - Which scope? Sua conta
-# - Link to existing project? No
-# - Project name? quadra-reservas
-# - Directory? ./
-# - Override settings? No
-```
-
-### 5.3. Configurar Variável de Ambiente
-```bash
-# Usar a URL real do Railway
-vercel env add NEXT_PUBLIC_API_URL production
-
-# Quando perguntar o valor, cole:
-# https://SUA-URL-RAILWAY.railway.app/api/v1
-```
-
-### 5.4. Deploy para Produção
-```bash
-vercel --prod
-```
-
-### 5.5. Obter URL Final
-Vercel vai gerar algo como: `https://quadra-reservas.vercel.app`
-
-### 5.6. ATUALIZAR CORS no Backend
-```bash
-# Atualizar variáveis no Railway com a URL real do Vercel
-railway variables set CORS_ORIGINS="https://sua-app-real.vercel.app"
-railway variables set FRONTEND_URL="https://sua-app-real.vercel.app"
-```
+---
 
 ## 🗃️ Passo 6: Aplicar Migrações no Supabase
 
 ```bash
-# Na pasta backend local
+# Na máquina local
 cd /home/henrique/Quadra-JP2/backend
 
 # Configurar temporariamente a DATABASE_URL do Supabase
-export DATABASE_URL="postgresql+asyncpg://postgres.xxx..."
+export DATABASE_URL="postgresql+asyncpg://postgres.xxx:senha@...pooler.supabase.com:6543/postgres"
+
+# Ativar ambiente virtual
+source .venv/bin/activate
 
 # Aplicar migrações
 alembic upgrade head
+
+# Seed inicial (se tiver)
+python scripts/seed.py
 ```
 
-Ou via Railway:
-```bash
-railway run alembic upgrade head
-```
+---
 
 ## ✅ Passo 7: Testar Sistema Completo
 
-1. **Acessar Frontend**
-   - URL: https://sua-app.vercel.app
-   - Deve carregar a página de login
+### 7.1. Teste do Frontend
+1. Acesse: `https://seu-app.vercel.app`
+2. Deve carregar a página de login
 
-2. **Testar Login com Google**
-   - Clicar em "Entrar com Google"
-   - Fazer login com conta Google
-   - Deve redirecionar para dashboard
+### 7.2. Teste da API
+1. Acesse: `https://seu-app.vercel.app/api/healthz`
+2. Deve retornar: `{"status":"ok","version":"1.0.0"}`
 
-3. **Verificar Banco de Dados**
-   - Acessar Supabase Dashboard
-   - Ver se usuário foi criado na tabela `users`
+### 7.3. Teste do Login com Google
+1. Clique em "Entrar com Google"
+2. Faça login com conta Google
+3. Deve redirecionar para o dashboard
 
-4. **Testar Criação de Reserva**
-   - (se já tiver essa funcionalidade implementada)
+### 7.4. Verificar no Supabase
+1. Acesse Supabase Dashboard
+2. Vá em `Database` → `Table Editor`
+3. Abra a tabela `users`
+4. Verifique se o usuário foi criado
+
+---
 
 ## 🔧 Troubleshooting
 
-### Backend não inicia
-- Verificar logs: `railway logs`
-- Verificar se todas as variáveis estão configuradas
-- Testar connection string do Supabase
+### Frontend não carrega
+- Verifique logs no Vercel: Dashboard → Deployments → (sua deployment) → Logs
+- Verifique se build foi bem-sucedido
 
-### Frontend mostra erro 404 no login
-- Verificar se `NEXT_PUBLIC_API_URL` está configurado no Vercel
-- Verificar se aponta para URL correta do Railway (com `/api/v1`)
+### API retorna 404
+- Verifique se `vercel.json` está na raiz do projeto
+- Verifique se arquivos Python estão em `/api/`
+- Verifique se `@vercel/python` está configurado
 
 ### Erro de CORS
-- Verificar se `CORS_ORIGINS` no Railway está correto
-- Deve ser a URL exata do Vercel (sem / no final)
+- Verifique se `CORS_ORIGINS` está configurado corretamente
+- Deve ser a URL exata do Vercel (ex: `https://seu-app.vercel.app`)
 
 ### Google OAuth não funciona
-- Verificar se Redirect URI está correto no Google Cloud
-- Deve ser: `https://backend.railway.app/api/v1/auth/callback/google`
-- Verificar se Client ID e Secret estão corretos
+- Verifique se Redirect URI está correto no Google Cloud
+- Deve ser: `https://seu-app.vercel.app/api/auth/callback/google`
+- Verifique se Client ID e Secret estão corretos na Vercel
 
-## 📊 Monitoramento
+### Erro de conexão com banco
+- Verifique se `DATABASE_URL` está configurada na Vercel
+- Teste a connection string localmente: `psql "postgresql://postgres.xxx..."`
+- Verifique se Supabase está ativo
 
-### Railway
-- Logs: `railway logs`
-- Métricas: Dashboard do Railway
+---
 
-### Vercel  
-- Analytics: Dashboard do Vercel
-- Logs: Dashboard → Deployments → Logs
+## 📊 Monitoramento (GRÁTIS!)
+
+### Vercel
+- **Analytics**: Dashboard → Analytics (grátis!)
+- **Logs**: Dashboard → Deployments → Logs
+- **Performance**: Dashboard → Speed Insights
 
 ### Supabase
-- Dashboard → Database → Table Editor
-- Logs do banco
+- **Banco de Dados**: Dashboard → Database → Table Editor
+- **Logs**: Dashboard → Logs
+- **API Logs**: Dashboard → API
 
-## 💰 Custos
+### Google Cloud
+- **OAuth Stats**: APIs & Services → Dashboard
 
-- Vercel: Grátis
-- Railway: $5 crédito/mês (depois ~$5-10/mês)
-- Supabase: Grátis até 500MB
-- Upstash: Grátis até 10k req/dia
-- Google OAuth: Grátis
+---
+
+## 💰 Custos (100% GRÁTIS!)
+
+| Serviço | Plano Grátis | Limites |
+|---------|--------------|---------|
+| **Vercel** | Hobby (grátis) | 100GB bandwidth/mês, builds ilimitados |
+| **Supabase** | Free Tier | 500MB storage, 2GB transfer/mês |
+| **Upstash Redis** | Free via Supabase | 10k comandos/dia |
+| **Google OAuth** | Grátis | Ilimitado |
+
+**Total: R$ 0,00/mês** 🎉
+
+---
 
 ## 🔄 Próximos Deploys
 
+A Vercel faz deploy automático a cada push no GitHub!
+
 ```bash
-# Backend (Railway faz deploy automático ao fazer push)
+# Fazer alterações no código
 git add .
-git commit -m "Alterações"
+git commit -m "Minhas alterações"
 git push
 
-# Frontend
-cd frontend
-vercel --prod
+# A Vercel detecta automaticamente e faz deploy!
 ```
 
-## 🌐 Domínio Customizado (Opcional)
+Para forçar redeploy:
+1. Vá no dashboard da Vercel
+2. Deployments → (última) → Redeploy
 
-### Vercel
-1. Comprar domínio (ex: quadracondominio.com)
+---
+
+## 🌐 Domínio Customizado (Opcional, mas GRÁTIS!)
+
+### Usar domínio próprio na Vercel
+1. Comprar domínio (ex: quadracondominio.com.br) - ~R$40/ano
 2. No Vercel: Settings → Domains
 3. Adicionar domínio
 4. Configurar DNS conforme instruções
+5. SSL automático (grátis!)
 
-### Railway - Não suporta domínio custom no plano free
-- Usar URL do Railway mesmo
-- Ou usar Cloudflare Workers como proxy
+### Usar subdomínio gratuito
+Usar o domínio `.vercel.app` que vem de graça:
+- `quadra-reservas.vercel.app`
+- `quadra-jp2.vercel.app`
+
+---
+
+## 📝 Próximos Passos
+
+1. [ ] Converter backend FastAPI para Vercel Functions (vou gerar scripts!)
+2. [ ] Testar localmente com `vercel dev`
+3. [ ] Deploy na Vercel
+4. [ ] Configurar variáveis de ambiente
+5. [ ] Aplicar migrações no Supabase
+6. [ ] Testar sistema completo
+7. [ ] Adicionar primeiros usuários
+
+---
+
+## 🆘 Precisa de Ajuda?
+
+Vou criar scripts automatizados para:
+1. ✅ Converter FastAPI → Vercel Functions
+2. ✅ Gerar `vercel.json` automaticamente
+3. ✅ Validar configuração antes do deploy
+4. ✅ Aplicar migrações no Supabase
+
+**Próximo comando**: `/criar-scripts-deploy`
