@@ -74,7 +74,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     tower = relationship("Tower", back_populates="users")
-    reservations = relationship("Reservation", back_populates="user")
+    reservations = relationship("Reservation", foreign_keys="Reservation.user_id", back_populates="user")
     profile_requests = relationship("ProfileChangeRequest", foreign_keys="ProfileChangeRequest.user_id", back_populates="user")
 
 class Court(Base):
@@ -98,6 +98,7 @@ class Reservation(Base):
 
     user = relationship("User", foreign_keys=[user_id], back_populates="reservations")
     created_by = relationship("User", foreign_keys=[created_by_user_id])
+    cancelled_by_user = relationship("User", foreign_keys=[cancelled_by])
     events = relationship("ReservationEvent", back_populates="reservation", cascade="all, delete")
 
 class BlackoutWindow(Base):

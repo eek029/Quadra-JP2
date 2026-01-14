@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from database import Base, DATABASE_URL
 from models import * # Import all models to register them
+import ssl
+import certifi
 
 config = context.config
 
@@ -37,6 +39,13 @@ async def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
     configuration = config.get_section(config.config_ini_section)
     configuration["sqlalchemy.url"] = DATABASE_URL # Overwrite with env var
+
+    # Configure SSL for Supabase pooler
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    configuration["connect_args"] = {
+        "ssl": ssl_context,
+        "statement_cache_size": 0,
+    }
 
     connectable = async_engine_from_config(
         configuration,
