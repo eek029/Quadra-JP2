@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   backend:
     build:
@@ -21,7 +19,7 @@ services:
       - 8.8.8.8
     depends_on:
       - redis
-      # - db # Enable if running local db
+      - db
 
   frontend:
     build:
@@ -41,16 +39,16 @@ services:
     ports:
       - "6379:6379"
   # Local DB for development - Optional if using Supabase
-  # db:
-  #   image: postgres:15-alpine
-  #   ports:
-  #     - "5432:5432"
-  #   environment:
-  #     - POSTGRES_USER=${POSTGRES_USER:-postgres}
-  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-  #     - POSTGRES_DB=${POSTGRES_DB:-quadra}
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
+  db:
+    image: postgres:15-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-quadra}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
-  # volumes:
-  #   postgres_data:
+volumes:
+  postgres_data:
